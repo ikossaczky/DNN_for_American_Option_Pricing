@@ -1,37 +1,39 @@
-import sys, os, shutil, time
-
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
 import tensorflow as tf
 import keras.backend as K
 import keras
 
+def profit_loss(strike=5, interest_rate=0.05, T=1, option_type='call'):
 
-def profit_loss(dummy_target, stockdata):
-    # stockprices
-    stockprice = stockdata[:, :, 1]  # inputdata
-    # timestep
-    timepoint = stockdata[:, :, 2]
-    # probability that we will exercise at the given time if we still havent
-    exerprob = stockdata[:, :, 0]  # K.squeeze(exerprob, axis=2)
+    def profit_loss_(dummy_target, statedata):
 
-    # probabilty that we havent exercised the option yet
-    pshift = K.concatenate([K.zeros_like(exerprob[:, 0:1]), exerprob[:, :-1]])
-    one_minus_pshift = 1 - pshift
-    prob_notexercisedbefore = K.cumprod(one_minus_pshift, axis=1)
+        # probability that we will exercise at the given time if we still haven't:
+        exerprobs= statedata[:, :, 0]
 
-    # probability of using option at the given time:
-    willexerprob = exerprob * prob_notexercisedbefore
+        # stockprices:
+        stockprices = statedata[:, :, 1]
 
-    # profit for exercising at current time:
-    profit = K.maximum(stockprice - 5, 0)
+        # timepoints:
+        timepoints = statedata[:, :, 2]/T
 
-    # discounting profit:
-    interest_rate = 0.05
-    profit = K.exp(-interest_rate * timepoint) * profit
+        # probabilty that we havent exercised the option yet:
+        pshift = K.concatenate([K.zeros_like(exerprobs[:, 0:1]), exerprobs[:, :-1]])
+        one_minus_pshift = 1 - pshift
+        prob_notexercisedbefore = K.cumprod(one_minus_pshift, axis=1)
 
-    # average profit:
-    ap = K.sum(profit * willexerprob, axis=1)
-    return -K.mean(ap)
+        # probability of exercising the option at the given time:
+        willexerprob = exerprobs * prob_notexercisedbefore
+
+        # profit for exercising at current time:
+        if option_type=='call':
+            profit = K.maximum(stockprices - strike, 0)
+        else:
+            profit = K.maximum(strike - stockprices, 0)
+
+        # discounting profit:
+        profit = K.exp(-interest_rate * timepoints) * profit
+
+        # average profit:
+        ap = K.sum(profit * willexerprob, axis=1)
+        return -K.mean(ap)
+
+    return profit_loss_
